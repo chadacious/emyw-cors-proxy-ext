@@ -3,6 +3,7 @@
     "version": "1.0",
     "description": "Host sites in iframes and proxy requests through them to accomdate CORS restrictions",
     "author": "The Enjoy Team",
+    "manifest_version": 2,
     "background": {
         "scripts": [
             "background.js"
@@ -30,9 +31,7 @@
                 "https://*.hulu.com/*",
                 "https://*.vudu.com/*"
             ],
-            "js": [
-                "content.js"
-            ],
+            "js": ["content.js"],
             "all_frames": true,
             "run_at": "document_start"
         }
@@ -40,8 +39,6 @@
     "externally_connectable": {
         "matches": [
             "*://localhost/*",
-            "https://*.enjoymoviesyourway.com/*",
-            "https://*.enjoymoviesyourway.net/*",
             "https://*.netflix.com/*",
             "https://*.amazon.com/*",
             "https://*.disneyplus.com/*",
@@ -49,6 +46,5 @@
             "https://*.hulu.com/*",
             "https://*.vudu.com/*"
         ]
-    },
-    "manifest_version": 2
+    }
 }

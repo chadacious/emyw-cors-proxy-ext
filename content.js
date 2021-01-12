@@ -1,217 +1,108 @@
 
-const fetchDeviceToken = async () => {
-    let url = "https://global.edge.bamgrid.com/devices";
-    let headers = {
-        authorization: "Bearer " + apiKey,
-        "content-type": "application/json; charset=UTF-8"
-    };
-
-    let body = {
-        deviceFamily: "android", // "browser",
-        applicationRuntime: "android", // "chrome",
-        deviceProfile: "tv", // "macosx",
-        attributes: {}
-    };
-
-    let response = await fetch(url, {
-        method: "POST",
-        headers: headers,
-        body: JSON.stringify(body)
-    });
-
-    let responseObj = await response.json();
-
-    return responseObj.assertion;
+const simpleInjector = (func) => {
+    const actualCode = '(' + func + ')();'; // var actualCode = asObject ? '(' + func + ')(' + options ? JSON.stringify(options) : '' + ');' : func.toString();
+    const s = document.createElement("script");
+    s.textContent = actualCode;
+    document.documentElement.appendChild(s); // s.remove();
 };
 
-const fetchToken = async (token, tokenType) => {
-    let url = "https://global.edge.bamgrid.com/token";
-    let headers = {
-        authorization: "Bearer " + apiKey,
-        "content-type": "application/x-www-form-urlencoded; charset=utf-8"
-    };
-
-    let body = urlEncode({
-        grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
-        latitude: 0,
-        longitude: 0,
-        platform: "browser",
-        subject_token: token,
-        subject_token_type: tokenType
-    });
-
-    let response = await fetch(url, {
-        method: "POST",
-        headers: headers,
-        body: body
-    });
-
-    let responseObj = await response.json();
-
-    return responseObj;
-};
-
-const fetchPreAuthToken = async (deviceToken) => {
-    let tokenObj = await fetchToken(deviceToken, "urn:bamtech:params:oauth:token-type:device");
-
-    return tokenObj.access_token;
-};
-
-const fetchIdToken = async (preAuthToken, userName, password) => {
-    let url = "https://global.edge.bamgrid.com/idp/login";
-    let headers = {
-        authorization: "Bearer " + preAuthToken,
-        "content-type": "application/json; charset=UTF-8"
-    };
-
-    let body = {
-        email: userName,
-        password: password
-    };
-
-    let response = await fetch(url, {
-        method: "POST",
-        headers: headers,
-        body: JSON.stringify(body)
-    });
-
-    let responseObj = await response.json();
-
-    return responseObj.id_token;
-};
-
-const fetchGrantToken = async (preAuthToken, idToken) => {
-    let url = "https://global.edge.bamgrid.com/accounts/grant";
-    let headers = {
-        authorization: "Bearer " + preAuthToken,
-        "content-type": "application/json; charset=UTF-8"
-    };
-
-    let body = {
-        id_token: idToken
-    };
-
-    let response = await fetch(url, {
-        method: "POST",
-        headers: headers,
-        body: JSON.stringify(body)
-    });
-
-    let responseObj = await response.json();
-
-    return responseObj.assertion;
-};
-
-const fetchAccessRefreshTokens = async (grantToken) => {
-    return await fetchToken(grantToken, "urn:bamtech:params:oauth:token-type:account");
-};
-
-const refreshTokens = async (refreshToken) => {
-    let url = "https://global.edge.bamgrid.com/token";
-    let headers = {
-        authorization: "Bearer " + apiKey,
-        "content-type": "application/x-www-form-urlencoded; charset=utf-8"
-    };
-
-    let body = urlEncode({
-        grant_type: "refresh_token",
-        latitude: 0,
-        longitude: 0,
-        platform: "browser",
-        refresh_token: refreshToken
-    });
-
-    let response = await fetch(url, {
-        method: "POST",
-        headers: headers,
-        body: body
-    });
-
-    let tokens = await response.json();
-    localStorage.setItem("dplus-tokens", JSON.stringify(tokens));
-    return tokens;
-};
-
-const getAccessToken = async (forceRefresh) => {
-    let tokens = localStorage.getItem("dplus-tokens");
-    if (tokens && JSON.parse(tokens).access_token) {
-        const { access_token: accessToken } = JSON.parse(tokens);
-        const parsedToken = parseJwt(accessToken);
-        if (parsedToken.exp > (new Date().getTime()) / 1000 && !forceRefresh) {
-            console.log('Tokens seem good. Expires: ', parsedToken.exp, ' now ', (new Date().getTime() + 1) / 1000)
-            return JSON.parse(tokens).access_token;
-        } else if (JSON.parse(tokens).refresh_token) {
-            console.log('Tokens are expired. Refreshing...');
-            const jsonTokens = await refreshTokens(JSON.parse(tokens).refresh_token);
-            if (jsonTokens) {
-                return jsonTokens.access_token;
-            } else {
-                return null;
+if (window.self.location.host === 'www.disneyplus.com' && window.self !== window.top) {
+    simpleInjector(function () {
+        const realSelf = this.self;
+        this.self = this.top;
+        var hfbInterval;
+        const hookFrameBuster = () => {
+            var scripts = document.getElementsByTagName("script");
+            for (var i = 0; i < scripts.length; i++) {
+                if (!scripts[i].src && scripts[i].innerHTML.startsWith('\nif (self == top) {')) {
+                    // console.log(i, scripts[i].innerHTML)
+                    document.head.removeChild(scripts[i]);
+                    // setTimeout(() => this.self = realSelf, 10);
+                    this.self = realSelf;
+                    clearInterval(hfbInterval);
+                }
             }
-        }
-    }
-    return null;
+        };
+        hfbInterval = setInterval(hookFrameBuster, 1);
+    });
 }
 
-const parseJwt = (token) => {
-    try {
-        // Get Token Header
-        const base64HeaderUrl = token.split('.')[0];
-        const base64Header = base64HeaderUrl.replace('-', '+').replace('_', '/');
-        const headerData = JSON.parse(window.atob(base64Header));
-
-        // Get Token payload and date's
-        const base64Url = token.split('.')[1];
-        const base64 = base64Url.replace('-', '+').replace('_', '/');
-        const dataJWT = JSON.parse(window.atob(base64));
-        dataJWT.header = headerData;
-
-        // TODO: add expiration at check ...
-        console.log('The parsed token is: ', dataJWT);
-
-        return dataJWT;
-    } catch (err) {
-        return false;
+const getAccessToken = () => { 
+    const accessKey = Object.keys(window.localStorage).find(key => key.match(/_access--disney-/));
+    if (!accessKey) {
+        console.error('Access key not found');
+        return;
     }
-}
+    const accessContent = JSON.parse(window.localStorage[accessKey] || '{}');
+    const { token } = accessContent.context || {};
+    if (!token) {
+        console.error('Access token not found');
+        return;
+    }
+    return token;
+};
 
-window.chrome.runtime.onMessage.addListener(async (request, sender, response = () => { }) => {
+window.chrome.runtime.onMessage.addListener(async (request) => {
     console.log('recevied message from extension', request);
     if (request.ProviderRequest && window.location.host.indexOf("localhost") === -1) {
-        console.log('perform Provider Fetch here', window.location);
-        console.log(request);
-        const accessToken = await getAccessToken();
-        console.log('DP accessToken', accessToken);
+        const { url, reqType, resType, request: remoteRequest, provider } = request.ProviderRequest;
+        const { receiverUrl } = request;
+        const { headers: rawHeaders } = remoteRequest;
+        const accessToken = getAccessToken();
+        console.log('perform Provider Fetch here', remoteRequest);
+        // console.log('DP accessToken', accessToken);
         // replace header containing {accessToken} with accessToken
-        const { url, resType, receiverUrl, ...rest } = request.ProviderRequest;
+        const headers = rawHeaders ? JSON.parse(JSON.stringify(rawHeaders).replace('{accessToken}', accessToken)) : null;
+        console.log('headers:', headers);
         console.log('should respond', receiverUrl); // i.e. "http://localhost:3001/"
-        fetch(url, { ...rest })
-            .then((res) => {
-                if (resType === 'text') {
-                    res.text().then((res) => {
-                        response(res);
-                        console.log('Got provider response!!!', res);
-                        window.parent.postMessage(res, receiverUrl);
-                    });
-                } else if (resType === 'arrayBuffer') {
-                    res.arrayBuffer().then((bres) => {
-                        response(bres);
-                        console.log('Got provider response!!!', bres);
-                        window.parent.postMessage(bres, receiverUrl);
-                    });
-                } else {
-                    res.json().then((jres) => {
-                        response(jres);
-                        console.log('Got provider response!!!', jres);
-                        window.parent.postMessage(jres, receiverUrl);
-                    });
+        const fetchRequest = headers ? { ...remoteRequest, headers } : { ...remoteRequest };
+
+        if (reqType === 'arraybuffer') {
+            const byteArray = Uint8Array.from(atob(decodeURIComponent(fetchRequest.body)), c => c.charCodeAt(0))
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", url, true);
+            xhr.setRequestHeader('Authorization', 'Bearer ' + accessToken);
+            xhr.responseType = "arraybuffer";
+            xhr.withCredentials = false;
+            xhr.onreadystatechange = () => {
+                try {
+                    if (xhr.readyState == 4 && xhr.status == 200) {
+                       console.log("The disneyplus license is: " + xhr.response);
+                       const license = btoa(String.fromCharCode(...new Uint8Array(xhr.response)));
+                       window.parent.postMessage(license, receiverUrl);
+                    }
+                } catch (err) {
+                    window.parent.postMessage(err.message, receiverUrl);
+                    console.log(err);
                 }
-            })
-            .catch((err) => {
-                console.log('Provider response failed!!!', err);
-                console.log(err);
-                response(err.message);
-                window.parent.postMessage(err.message, receiverUrl);
-            });
+            };
+            xhr.send(byteArray);
+        } else {
+            console.log('requesting from ', url, 'with', fetchRequest);
+            fetch(url, fetchRequest)
+                .then((res) => {
+                    if (resType === 'text') {
+                        res.text().then((res) => {
+                            console.log('Got provider response!!!', res);
+                            window.parent.postMessage(res, receiverUrl);
+                        });
+                    } else if (resType === 'arrayBuffer') {
+                        res.arrayBuffer().then((bres) => {
+                            console.log('Got provider response!!!', bres);
+                            window.parent.postMessage(bres, receiverUrl);
+                        });
+                    } else {
+                        res.json().then((jres) => {
+                            console.log('Got provider response!!!', jres);
+                            window.parent.postMessage(jres, receiverUrl);
+                        });
+                    }
+                })
+                .catch((err) => {
+                    console.log('Provider response failed!!!', err);
+                    window.parent.postMessage(err.message, receiverUrl);
+                });
+        }
     }
+    return true;
 });

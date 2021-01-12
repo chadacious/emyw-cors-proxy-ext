@@ -1,58 +1,15 @@
-// const sendContentMsg = (tab, msgKey) => {
-//     if ((tab || {}).url) {
-//         const url = new URL((tab || {}).url);
-//         console.log('tab: ', tab, url.hostname);
-//         const message = {};
-//         message[msgKey] = url.hostname.concat(url.port ? `:${url.port}` : '');
-//         window.chrome.tabs.sendMessage(tab.id, { ...message, ...params });    
-//     }
-// };
-
-/* Tab loaded - send injectApp request */
-// window.chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-//     console.log('onUpdated', changeInfo.status);
-//     if (changeInfo.status === 'complete') {
-//         console.log('checking active tab for update');
-//         sendContentMsg(tab, 'injectApp');
-//     }
-// });
-
-// /* Tab switch - check if app needs to be injected */
-// window.chrome.tabs.onActivated.addListener((activeInfo) => {
-//     console.log('onActivated');
-//     window.chrome.tabs.get(
-//         activeInfo.tabId,
-//         (tab) => sendContentMsg(tab, 'injectAppCheck'),
-//     );
-// });
-
-// chrome.webNavigation.onCompleted.addListener((activeInfo) => {
-//     console.log('onCompleted');
-//     window.chrome.tabs.get(
-//         activeInfo.tabId,
-//         (tab) => sendContentMsg(tab, 'injectApp'),
-//     );
-// });
-
-// chrome.webNavigation.onHistoryStateUpdated.addListener((activeInfo) => {
-//     console.log('onHistoryStateUpdated');
-//     window.chrome.tabs.get(
-//         activeInfo.tabId,
-//         (tab) => sendContentMsg(tab, 'injectApp'),
-//     );
-// });
-window.chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
+// forward requests coming into the extension to the content script
+window.chrome.runtime.onMessageExternal.addListener((request, sender) => {
     if (request.ProviderRequest) {
         const { tab } = sender;
         const { ProviderRequest } = request;
-        console.log(tab, 'Got ProviderRequest, passing along');
+        console.log(tab, 'Got ProviderRequest, passing along', sender);
         console.log(ProviderRequest);
-        window.chrome.tabs.sendMessage(tab.id, { ProviderRequest });
+        window.chrome.tabs.sendMessage(tab.id, { ProviderRequest, receiverUrl: sender.url });
     }
 });
 
 const processHeadersReceived = (details) => {
-    // log.warn(details);
     try {
         // console.log('host', host);
         // console.warn('processHeadersReceived', details.responseHeaders);
@@ -69,10 +26,7 @@ const processHeadersReceived = (details) => {
                 }
                 if (details.responseHeaders[j].name.toLowerCase() === 'set-cookie') {
                     // Checking for specific cookies works! But then I figured, why not just set the all.
-                    //const value = details.responseHeaders[j].value.split('=');
-                    //if (['NetflixId', 'SecureNetflixId'].includes(value[0])) {
                     details.responseHeaders[j].value = `${details.responseHeaders[j].value}; SameSite=None; Secure`;
-                    //}
                 }
             }
             if (details.responseHeaders[j].name.toLowerCase() === 'access-control-allow-origin') {
@@ -82,7 +36,7 @@ const processHeadersReceived = (details) => {
                 }
             }
         }
-        // log.warn('modified Headers', details.responseHeaders);
+        // console.log('modified Headers', details.responseHeaders);
         return { responseHeaders: details.responseHeaders };
     } catch (error) {
         console.error('Error processing headers', error);
