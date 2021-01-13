@@ -57,6 +57,11 @@ window.chrome.runtime.onMessage.addListener(async (request) => {
         console.log('should respond', receiverUrl); // i.e. "http://localhost:3001/"
         const fetchRequest = headers ? { ...remoteRequest, headers } : { ...remoteRequest };
 
+        const sendResponse = (res) => {
+            console.log('Got provider response!!!', res);
+            window.parent.postMessage(encodeURIComponent(JSON.stringify({ payload: res })), receiverUrl);
+        };
+
         if (reqType === 'arraybuffer') {
             const byteArray = Uint8Array.from(atob(decodeURIComponent(fetchRequest.body)), c => c.charCodeAt(0))
             var xhr = new XMLHttpRequest();
@@ -67,12 +72,11 @@ window.chrome.runtime.onMessage.addListener(async (request) => {
             xhr.onreadystatechange = () => {
                 try {
                     if (xhr.readyState == 4 && xhr.status == 200) {
-                       console.log("The disneyplus license is: " + xhr.response);
                        const license = btoa(String.fromCharCode(...new Uint8Array(xhr.response)));
-                       window.parent.postMessage(license, receiverUrl);
+                       sendResponse(license);
                     }
                 } catch (err) {
-                    window.parent.postMessage(err.message, receiverUrl);
+                    window.parent.postMessage(JSON.stringify({ payload: err.message }), receiverUrl);
                     console.log(err);
                 }
             };
@@ -83,18 +87,11 @@ window.chrome.runtime.onMessage.addListener(async (request) => {
                 .then((res) => {
                     if (resType === 'text') {
                         res.text().then((res) => {
-                            console.log('Got provider response!!!', res);
-                            window.parent.postMessage(res, receiverUrl);
-                        });
-                    } else if (resType === 'arrayBuffer') {
-                        res.arrayBuffer().then((bres) => {
-                            console.log('Got provider response!!!', bres);
-                            window.parent.postMessage(bres, receiverUrl);
+                            sendResponse(res);
                         });
                     } else {
                         res.json().then((jres) => {
-                            console.log('Got provider response!!!', jres);
-                            window.parent.postMessage(jres, receiverUrl);
+                            sendResponse({ ...jres });
                         });
                     }
                 })
